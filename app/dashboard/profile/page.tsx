@@ -2,10 +2,22 @@
 
 import { useState, useEffect } from "react"
 import { motion } from "framer-motion"
-import { User, Mail, Calendar, Weight, Weight as Height, Zap, Save, Loader2 } from "lucide-react"
+import { User, Mail, Calendar, Weight, Weight as Height, Zap, Save, Loader2, Plus, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { createClient } from "@/lib/supabase/client"
+import {
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+} from "recharts"
+import { logBiometrics, getBiometrics, deleteBiometricEntry } from "@/app/actions/biometrics"
+import type { BiometricEntry } from "@/app/actions/biometrics"
 
 interface UserProfile {
   full_name: string
@@ -51,6 +63,15 @@ export default function ProfilePage() {
   const [savedMessage, setSavedMessage] = useState("")
   const [userId, setUserId] = useState<string | null>(null)
 
+  // Biometrics
+  const [biometrics, setBiometrics] = useState<BiometricEntry[]>([])
+  const [bioWeight, setBioWeight] = useState("")
+  const [bioFat, setBioFat] = useState("")
+  const [bioDate, setBioDate] = useState(new Date().toISOString().split("T")[0])
+  const [bioNotes, setBioNotes] = useState("")
+  const [loggingBio, setLoggingBio] = useState(false)
+  const [showBioForm, setShowBioForm] = useState(false)
+
   useEffect(() => {
     ;(async () => {
       const supabase = createClient()
@@ -70,6 +91,9 @@ export default function ProfilePage() {
       } else {
         setProfile(prev => ({ ...prev, email: user.email || "" }))
       }
+      // Load biometrics history
+      const { data: bioData } = await getBiometrics(60)
+      if (bioData) setBiometrics(bioData)
       setIsLoading(false)
     })()
   }, [])
@@ -276,6 +300,191 @@ export default function ProfilePage() {
             ))}
           </div>
         </motion.div>
+
+        {/* ── Biometrics History ──────────────────────────────────────────── */}
+        <motion.div
+          variants={itemVariants}
+          initial="hidden"
+          animate="visible"
+          className="mt-8 bg-card border border-border rounded-xl p-8"
+        >
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h3 className="text-lg font-semibold text-foreground">Biometrics History</h3>
+              <p className="text-sm text-foreground/50 mt-0.5">Track weight &amp; body fat over time</p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowBioForm(!showBioForm)}
+              className="flex items-center gap-2"
+            >
+              <Plus size={14} />
+              Log Entry
+            </Button>
+          </div>
+
+          {/* Log form */}
+          {showBioForm && (
+            <motion.div
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-muted/50 border border-border rounded-xl p-4 mb-6 space-y-4"
+            >
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-foreground/70 mb-1">Weight (kg)</label>
+                  <Input
+                    type="number" step="0.1" placeholder="70.5"
+                    value={bioWeight} onChange={(e) => setBioWeight(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-foreground/70 mb-1">Body Fat %</label>
+                  <Input
+                    type="number" step="0.1" placeholder="18.5"
+                    value={bioFat} onChange={(e) => setBioFat(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-foreground/70 mb-1">Date</label>
+                  <Input
+                    type="date"
+                    value={bioDate} onChange={(e) => setBioDate(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-foreground/70 mb-1">Notes (optional)</label>
+                  <Input
+                    placeholder="After morning run"
+                    value={bioNotes} onChange={(e) => setBioNotes(e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  onClick={async () => {
+                    if (!bioWeight && !bioFat) return
+                    setLoggingBio(true)
+                    const result = await logBiometrics({
+                      weight: bioWeight ? parseFloat(bioWeight) : undefined,
+                      fat_percentage: bioFat ? parseFloat(bioFat) : undefined,
+                      notes: bioNotes || undefined,
+                      recorded_at: bioDate,
+                    })
+                    if (result.success && result.data) {
+                      setBiometrics(prev => [...prev, result.data!].sort(
+                        (a, b) => new Date(a.recorded_at).getTime() - new Date(b.recorded_at).getTime()
+                      ))
+                      setBioWeight("")
+                      setBioFat("")
+                      setBioNotes("")
+                      setBioDate(new Date().toISOString().split("T")[0])
+                      setShowBioForm(false)
+                    }
+                    setLoggingBio(false)
+                  }}
+                  disabled={loggingBio || (!bioWeight && !bioFat)}
+                  className="bg-primary text-primary-foreground hover:bg-primary/90"
+                >
+                  {loggingBio ? <><Loader2 size={14} className="mr-2 animate-spin" />Saving…</> : <><Plus size={14} className="mr-2" />Save Entry</>}
+                </Button>
+                <Button variant="outline" onClick={() => setShowBioForm(false)}>Cancel</Button>
+              </div>
+            </motion.div>
+          )}
+
+          {/* Chart */}
+          {biometrics.length >= 2 ? (
+            <div className="mb-6">
+              <ResponsiveContainer width="100%" height={220}>
+                <AreaChart data={biometrics} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
+                  <defs>
+                    <linearGradient id="weightGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.35} />
+                      <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0.03} />
+                    </linearGradient>
+                    <linearGradient id="fatGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#f97316" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#f97316" stopOpacity={0.03} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.5} />
+                  <XAxis
+                    dataKey="recorded_at"
+                    tickFormatter={(v) => new Date(v).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                    tick={{ fontSize: 11, fill: "hsl(var(--foreground)/0.5)" }}
+                    axisLine={false} tickLine={false}
+                  />
+                  <YAxis tick={{ fontSize: 11, fill: "hsl(var(--foreground)/0.5)" }} axisLine={false} tickLine={false} />
+                  <Tooltip
+                    contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }}
+                    labelFormatter={(v) => new Date(v).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
+                  />
+                  <Legend wrapperStyle={{ fontSize: 12 }} />
+                  <Area type="monotone" dataKey="weight" name="Weight (kg)" stroke="hsl(var(--primary))" fill="url(#weightGrad)" strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
+                  <Area type="monotone" dataKey="fat_percentage" name="Body Fat %" stroke="#f97316" fill="url(#fatGrad)" strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          ) : biometrics.length === 0 ? (
+            <div className="text-center py-10 text-foreground/40">
+              <p className="text-sm">No biometric entries yet.</p>
+              <p className="text-xs mt-1">Click "Log Entry" to start tracking.</p>
+            </div>
+          ) : (
+            <div className="text-center py-6 text-foreground/40 text-sm">
+              Add at least 2 entries to see the trend chart.
+            </div>
+          )}
+
+          {/* Recent entries table */}
+          {biometrics.length > 0 && (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border">
+                    <th className="text-left py-2 px-3 text-foreground/60 font-medium">Date</th>
+                    <th className="text-right py-2 px-3 text-foreground/60 font-medium">Weight</th>
+                    <th className="text-right py-2 px-3 text-foreground/60 font-medium">Body Fat</th>
+                    <th className="text-left py-2 px-3 text-foreground/60 font-medium hidden sm:table-cell">Notes</th>
+                    <th className="py-2 px-3"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...biometrics].reverse().slice(0, 10).map((entry) => (
+                    <tr key={entry.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
+                      <td className="py-2 px-3 text-foreground">
+                        {new Date(entry.recorded_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                      </td>
+                      <td className="py-2 px-3 text-right font-semibold text-foreground">
+                        {entry.weight ? `${entry.weight} kg` : "—"}
+                      </td>
+                      <td className="py-2 px-3 text-right font-semibold text-foreground">
+                        {entry.fat_percentage ? `${entry.fat_percentage}%` : "—"}
+                      </td>
+                      <td className="py-2 px-3 text-foreground/50 hidden sm:table-cell">
+                        {entry.notes || "—"}
+                      </td>
+                      <td className="py-2 px-3 text-right">
+                        <button
+                          onClick={async () => {
+                            const result = await deleteBiometricEntry(entry.id)
+                            if (result.success) setBiometrics(prev => prev.filter(e => e.id !== entry.id))
+                          }}
+                          className="text-foreground/30 hover:text-red-500 transition-colors"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </motion.div>
+
         </>)}
       </div>
     </div>

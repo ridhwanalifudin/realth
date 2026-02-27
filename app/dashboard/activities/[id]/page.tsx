@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect, use } from "react"
+import { useState, useEffect, use, useRef } from "react"
 import { motion } from "framer-motion"
 import {
   Activity,
@@ -16,10 +16,15 @@ import {
   X,
   Weight,
   Loader2,
+  Camera,
+  Star,
+  Image as ImageIcon,
 } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { getActivity, updateActivity, enrichActivity } from "@/app/actions/activities"
+import { createClient } from "@/lib/supabase/client"
+import { getActivity, saveActivityEnrichment, enrichActivity } from "@/app/actions/activities"
+import HeroCardDialog from "@/components/hero-card"
 
 // --- helpers ---
 function formatTime(seconds: number): string {
@@ -77,9 +82,33 @@ export default function ActivityDetailPage({ params }: { params: Promise<{ id: s
   const [notFound, setNotFound] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [saveError, setSaveError] = useState("")
+
+  // form fields
   const [caption, setCaption] = useState("")
   const [weight, setWeight] = useState<number | "">("")
+  const [avgHR, setAvgHR] = useState<number | "">("")
+  const [maxHR, setMaxHR] = useState<number | "">("")
+  const [feelingScale, setFeelingScale] = useState<number | null>(null)
+
+  // photo upload
+  const [photoFile, setPhotoFile] = useState<File | null>(null)
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null)
+  const [uploadingPhoto, setUploadingPhoto] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
   const [savingVo2, setSavingVo2] = useState(false)
+  const [heroOpen, setHeroOpen] = useState(false)
+
+  function resetForm(data: any) {
+    setCaption(data.caption || "")
+    setWeight(data.weight_at_time || "")
+    setAvgHR(data.avg_heart_rate || "")
+    setMaxHR(data.max_heart_rate || "")
+    setFeelingScale(data.feeling_scale || null)
+    setPhotoFile(null)
+    setPhotoPreview(null)
+  }
 
   useEffect(() => {
     ;(async () => {
@@ -88,24 +117,75 @@ export default function ActivityDetailPage({ params }: { params: Promise<{ id: s
         setNotFound(true)
       } else {
         setActivity(data)
-        setCaption(data.caption || "")
-        setWeight(data.weight_at_time || "")
+        resetForm(data)
       }
       setLoading(false)
     })()
   }, [id])
 
+  function handlePhotoSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setPhotoFile(file)
+    const reader = new FileReader()
+    reader.onloadend = () => setPhotoPreview(reader.result as string)
+    reader.readAsDataURL(file)
+  }
+
+  async function uploadPhoto(userId: string): Promise<string | null> {
+    if (!photoFile) return null
+    setUploadingPhoto(true)
+    const supabase = createClient()
+    const ext = photoFile.name.split(".").pop() || "jpg"
+    const path = `${userId}/${id}-${Date.now()}.${ext}`
+    const { error } = await supabase.storage
+      .from("activity-photos")
+      .upload(path, photoFile, { upsert: true })
+    setUploadingPhoto(false)
+    if (error) { setSaveError(`Photo upload failed: ${error.message}`); return null }
+    const { data } = supabase.storage.from("activity-photos").getPublicUrl(path)
+    return data.publicUrl
+  }
+
   const handleSave = async () => {
     setIsSaving(true)
-    const result = await updateActivity(id, {
-      caption: caption || undefined,
-      weight_at_time: weight ? Number(weight) : undefined,
-    })
-    if (result.success && result.data) {
-      setActivity(result.data)
+    setSaveError("")
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { setSaveError("Not authenticated"); setIsSaving(false); return }
+
+    let photoUrl: string | null | undefined = undefined
+    if (photoFile) {
+      photoUrl = await uploadPhoto(user.id)
+      if (photoUrl === null) { setIsSaving(false); return }
     }
+
+    const hrAvg = avgHR ? Number(avgHR) : undefined
+    const hrMax = maxHR ? Number(maxHR) : undefined
+    const computedVo2 = hrAvg && !activity.vo2max_estimate
+      ? computeVO2Max(hrAvg, hrMax ?? null)
+      : undefined
+
+    const result = await saveActivityEnrichment(id, {
+      avg_heart_rate: hrAvg ?? null,
+      max_heart_rate: hrMax ?? null,
+      feeling_scale: feelingScale ?? null,
+      caption: caption || null,
+      weight_at_time: weight ? Number(weight) : null,
+      photo_url: photoUrl,
+      ...(computedVo2 ? { vo2max_estimate: computedVo2 } : {}),
+    })
+
+    if (!result.success || !result.data) {
+      setSaveError(result.error || "Failed to save")
+      setIsSaving(false)
+      return
+    }
+    setActivity(result.data)
     setIsEditing(false)
     setIsSaving(false)
+    setPhotoFile(null)
+    setPhotoPreview(null)
   }
 
   if (loading) {
@@ -129,6 +209,7 @@ export default function ActivityDetailPage({ params }: { params: Promise<{ id: s
 
   const distanceKm = (activity.distance / 1000).toFixed(2)
   const speedKmh = activity.average_speed ? (activity.average_speed * 3.6).toFixed(1) : "—"
+  const displayPhoto = photoPreview || activity.photo_url
   const vo2 = activity.vo2max_estimate
     || (activity.avg_heart_rate
       ? computeVO2Max(activity.avg_heart_rate, activity.max_heart_rate)
@@ -148,7 +229,7 @@ export default function ActivityDetailPage({ params }: { params: Promise<{ id: s
 
         {/* Header */}
         <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-start justify-between gap-4 mb-4">
             <div>
               <h1 className="text-4xl font-bold text-foreground mb-2">{activity.display_name}</h1>
               <p className="text-foreground/70">
@@ -157,17 +238,45 @@ export default function ActivityDetailPage({ params }: { params: Promise<{ id: s
                 })}
               </p>
             </div>
-            <Button
-              onClick={() => {
-                if (isEditing) { setCaption(activity.caption || ""); setWeight(activity.weight_at_time || "") }
-                setIsEditing(!isEditing)
-              }}
-              className="bg-primary text-primary-foreground hover:bg-primary/90"
-            >
-              <Edit2 size={18} className="mr-2" />
-              {isEditing ? "Cancel" : "Edit"}
-            </Button>
+            <div className="flex gap-2 shrink-0">
+              <Button
+                variant="outline"
+                onClick={() => setHeroOpen(true)}
+                className="hidden sm:flex items-center gap-2"
+              >
+                <ImageIcon size={16} className="mr-1" />
+                Hero Card
+              </Button>
+              <Button
+                onClick={() => {
+                  if (isEditing) resetForm(activity)
+                  setIsEditing(!isEditing)
+                  setSaveError("")
+                }}
+                className="bg-primary text-primary-foreground hover:bg-primary/90"
+              >
+                <Edit2 size={18} className="mr-2" />
+                {isEditing ? "Cancel" : "Edit"}
+              </Button>
+            </div>
           </div>
+
+          {/* Photo Banner */}
+          {displayPhoto && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.98 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="rounded-2xl overflow-hidden aspect-video max-h-64 bg-muted relative mb-2"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={displayPhoto} alt="Activity photo" className="w-full h-full object-cover" />
+              {photoPreview && (
+                <span className="absolute top-2 right-2 bg-black/50 text-white text-xs px-2 py-1 rounded-full">
+                  Preview — not saved yet
+                </span>
+              )}
+            </motion.div>
+          )}
         </motion.div>
 
         {/* Main Stats */}
@@ -197,7 +306,37 @@ export default function ActivityDetailPage({ params }: { params: Promise<{ id: s
               <Heart className="w-5 h-5 text-red-500" />
               Heart Rate
             </h2>
-            {activity.avg_heart_rate ? (
+            {isEditing ? (
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1">Avg HR (bpm)</label>
+                  <input
+                    type="number"
+                    value={avgHR}
+                    onChange={(e) => setAvgHR(e.target.value ? Number(e.target.value) : "")}
+                    placeholder="e.g. 155"
+                    min={60} max={220}
+                    className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground focus:outline-none focus:border-primary text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1">Max HR (bpm)</label>
+                  <input
+                    type="number"
+                    value={maxHR}
+                    onChange={(e) => setMaxHR(e.target.value ? Number(e.target.value) : "")}
+                    placeholder="e.g. 182"
+                    min={60} max={220}
+                    className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground focus:outline-none focus:border-primary text-sm"
+                  />
+                </div>
+                {avgHR && (
+                  <div className="bg-primary/10 rounded-lg p-3 text-sm text-primary font-medium">
+                    VO2Max preview: {computeVO2Max(Number(avgHR), maxHR ? Number(maxHR) : null).toFixed(1)}
+                  </div>
+                )}
+              </div>
+            ) : activity.avg_heart_rate ? (
               <div className="space-y-4">
                 <div>
                   <p className="text-sm text-foreground/70 mb-1">Average</p>
@@ -213,7 +352,7 @@ export default function ActivityDetailPage({ params }: { params: Promise<{ id: s
             ) : (
               <div className="text-center py-6">
                 <Heart className="w-10 h-10 mx-auto mb-3 text-foreground/20" />
-                <p className="text-sm text-foreground/50">No heart rate data.<br />Wear a monitor next time!</p>
+                <p className="text-sm text-foreground/50">No heart rate data.<br />Click Edit to add HR manually.</p>
               </div>
             )}
           </motion.div>
@@ -260,10 +399,47 @@ export default function ActivityDetailPage({ params }: { params: Promise<{ id: s
                   </div>
                 </>
               )}
+              {/* Feeling scale */}
+              <div className="pt-2 border-t border-primary/20">
+                <p className="text-sm font-medium text-foreground mb-2 flex items-center gap-1">
+                  <Star size={14} className="text-yellow-500" />
+                  Effort level
+                  {activity.feeling_scale && !isEditing && (
+                    <span className="ml-1 text-primary font-bold">{activity.feeling_scale}/10</span>
+                  )}
+                </p>
+                {isEditing ? (
+                  <div className="flex gap-1 flex-wrap">
+                    {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
+                      <button
+                        key={n}
+                        onClick={() => setFeelingScale(n)}
+                        className={`w-8 h-8 rounded-full text-sm font-semibold border transition-colors ${
+                          feelingScale === n
+                            ? "bg-primary text-primary-foreground border-primary"
+                            : "bg-background border-border text-foreground/70 hover:border-primary"
+                        }`}
+                      >
+                        {n}
+                      </button>
+                    ))}
+                  </div>
+                ) : activity.feeling_scale ? (
+                  <div className="flex gap-1">
+                    {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
+                      <div key={n} className={`w-6 h-3 rounded-sm ${n <= activity.feeling_scale ? "bg-primary" : "bg-muted"}`} />
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-foreground/40">Not rated — click Edit to rate.</p>
+                )}
+              </div>
+
+              {/* Weight at time */}
               {isEditing && (
-                <div className="space-y-2 pt-4 border-t border-primary/20">
+                <div className="space-y-2 pt-2 border-t border-primary/20">
                   <label className="text-sm font-medium text-foreground flex items-center gap-2">
-                    <Weight size={16} className="text-primary" />
+                    <Weight size={14} className="text-primary" />
                     Weight at time (kg)
                   </label>
                   <input
@@ -272,7 +448,7 @@ export default function ActivityDetailPage({ params }: { params: Promise<{ id: s
                     onChange={(e) => setWeight(e.target.value ? Number(e.target.value) : "")}
                     step="0.1"
                     placeholder="e.g. 70.5"
-                    className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground focus:outline-none focus:border-primary"
+                    className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground focus:outline-none focus:border-primary text-sm"
                   />
                 </div>
               )}
@@ -313,6 +489,7 @@ export default function ActivityDetailPage({ params }: { params: Promise<{ id: s
 
           {isEditing ? (
             <div className="space-y-4">
+              {/* Caption */}
               <div>
                 <label className="block text-sm font-medium text-foreground mb-2">Caption</label>
                 <input
@@ -325,23 +502,77 @@ export default function ActivityDetailPage({ params }: { params: Promise<{ id: s
                 />
                 <p className="text-xs text-foreground/50 mt-1">{caption.length}/100</p>
               </div>
+
+              {/* Photo upload */}
+              <div>
+                <label className="flex items-center gap-2 text-sm font-medium text-foreground mb-2">
+                  <Camera size={14} className="text-primary" />
+                  Activity Photo
+                </label>
+                <div
+                  onClick={() => fileInputRef.current?.click()}
+                  className="border-2 border-dashed border-border rounded-xl p-6 text-center cursor-pointer hover:border-primary transition-colors"
+                >
+                  {photoPreview ? (
+                    <div className="space-y-2">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={photoPreview} alt="Preview" className="w-full max-h-40 object-cover rounded-lg mx-auto" />
+                      <p className="text-xs text-foreground/50">Click to change photo</p>
+                    </div>
+                  ) : activity.photo_url ? (
+                    <div className="space-y-2">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={activity.photo_url} alt="Current" className="w-full max-h-40 object-cover rounded-lg mx-auto" />
+                      <p className="text-xs text-foreground/50">Click to replace photo</p>
+                    </div>
+                  ) : (
+                    <>
+                      <Camera className="w-10 h-10 mx-auto mb-2 text-foreground/30" />
+                      <p className="text-sm text-foreground/50">Click to upload a photo</p>
+                      <p className="text-xs text-foreground/30 mt-1">JPG, PNG, WEBP — max 10 MB</p>
+                    </>
+                  )}
+                </div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handlePhotoSelect}
+                  className="hidden"
+                />
+              </div>
+
+              {/* Error */}
+              {saveError && (
+                <p className="text-red-500 text-sm bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
+                  {saveError}
+                </p>
+              )}
+
+              {/* Save / Cancel */}
               <div className="flex gap-2">
-                <Button onClick={handleSave} disabled={isSaving} className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90">
-                  {isSaving ? <Loader2 size={18} className="mr-2 animate-spin" /> : <Check size={18} className="mr-2" />}
-                  {isSaving ? "Saving…" : "Save"}
+                <Button
+                  onClick={handleSave}
+                  disabled={isSaving || uploadingPhoto}
+                  className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90"
+                >
+                  {(isSaving || uploadingPhoto) ? (
+                    <><Loader2 size={18} className="mr-2 animate-spin" />{uploadingPhoto ? "Uploading…" : "Saving…"}</>
+                  ) : (
+                    <><Check size={18} className="mr-2" />Save</>
+                  )}
                 </Button>
                 <Button
-                  onClick={() => { setIsEditing(false); setCaption(activity.caption || ""); setWeight(activity.weight_at_time || "") }}
+                  onClick={() => { setIsEditing(false); resetForm(activity); setSaveError("") }}
                   variant="outline"
                   className="flex-1"
                 >
-                  <X size={18} className="mr-2" />
-                  Cancel
+                  <X size={18} className="mr-2" /> Cancel
                 </Button>
               </div>
             </div>
           ) : (
-            <div>
+            <div className="space-y-3">
               {activity.caption ? (
                 <div className="p-4 bg-background border border-border rounded-lg">
                   <p className="text-sm font-semibold text-foreground italic">"{activity.caption}"</p>
@@ -352,7 +583,25 @@ export default function ActivityDetailPage({ params }: { params: Promise<{ id: s
             </div>
           )}
         </motion.div>
+
+        {/* Hero Card button (mobile only) */}
+        <div className="sm:hidden mb-8">
+          <Button onClick={() => setHeroOpen(true)} className="w-full bg-primary text-primary-foreground">
+            <ImageIcon size={18} className="mr-2" />
+            Generate Hero Card
+          </Button>
+        </div>
+
       </div>
+
+      {/* Hero Card Dialog */}
+      <HeroCardDialog
+        open={heroOpen}
+        onClose={() => setHeroOpen(false)}
+        activity={activity}
+        vo2={vo2}
+        level={level}
+      />
     </div>
   )
 }

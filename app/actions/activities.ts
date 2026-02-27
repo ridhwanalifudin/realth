@@ -139,6 +139,47 @@ export async function createActivity(activityData: {
   }
 }
 
+// Single combined save for everything the enrichment form can touch
+export async function saveActivityEnrichment(activityId: string, fields: {
+  avg_heart_rate?: number | null
+  max_heart_rate?: number | null
+  vo2max_estimate?: number | null
+  feeling_scale?: number | null
+  photo_url?: string | null
+  caption?: string | null
+  weight_at_time?: number | null
+}) {
+  try {
+    const supabase = await createServerSupabaseClient()
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) return { error: 'Unauthorized', success: false }
+
+    // Strip undefined keys so we don't accidentally null-out untouched fields
+    const updates: Record<string, unknown> = { updated_at: new Date().toISOString() }
+    for (const [k, v] of Object.entries(fields)) {
+      if (v !== undefined) updates[k] = v
+    }
+
+    const { data, error } = await supabase
+      .from('activities')
+      .update(updates)
+      .eq('id', activityId)
+      .eq('user_id', user.id)
+      .select()
+      .single()
+
+    if (error) return { error: error.message, success: false }
+
+    revalidatePath('/dashboard/activities')
+    revalidatePath(`/dashboard/activities/${activityId}`)
+    revalidatePath('/dashboard')
+
+    return { data, success: true }
+  } catch (err: any) {
+    return { error: err.message || 'Failed to save enrichment', success: false }
+  }
+}
+
 export async function getActivities() {
   try {
     const supabase = await createServerSupabaseClient()
