@@ -1,65 +1,61 @@
 {
   "name": "Realth - Running & Health Tracker",
   "short_name": "Realth",
-  "description": "Advanced running tracker with Strava integration, biometric analysis, and health insights",
+  "description": "Track your running progress with Strava integration, biometric analysis, and VO2Max insights",
   "start_url": "/dashboard",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#ffffff",
+  "display_override": ["window-controls-overlay", "standalone", "browser"],
+  "background_color": "#0f172a",
   "theme_color": "#16a34a",
   "orientation": "portrait-primary",
+  "lang": "en",
   "icons": [
     {
-      "src": "/icon-192.png",
+      "src": "/api/icon-192",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
     },
     {
-      "src": "/icon-512.png",
+      "src": "/api/icon-512",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "/api/icon-512",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
     }
   ],
   "categories": ["health", "fitness", "sports"],
-  "screenshots": [
-    {
-      "src": "/screenshot-mobile.png",
-      "sizes": "390x844",
-      "type": "image/png",
-      "form_factor": "narrow"
-    },
-    {
-      "src": "/screenshot-desktop.png",
-      "sizes": "1920x1080",
-      "type": "image/png",
-      "form_factor": "wide"
-    }
-  ],
   "shortcuts": [
     {
       "name": "Add Activity",
-      "short_name": "Add",
-      "description": "Quick add new running activity",
-      "url": "/dashboard/add-activity",
-      "icons": [
-        {
-          "src": "/icon-add.png",
-          "sizes": "96x96"
-        }
-      ]
+      "short_name": "Add Run",
+      "description": "Log a new running activity",
+      "url": "/dashboard/add-activity"
     },
     {
-      "name": "View Activities",
+      "name": "Activities",
       "short_name": "Activities",
-      "description": "View all running activities",
-      "url": "/dashboard/activities",
-      "icons": [
-        {
-          "src": "/icon-activities.png",
-          "sizes": "96x96"
-        }
-      ]
+      "description": "View all synced activities",
+      "url": "/dashboard/activities"
+    },
+    {
+      "name": "Profile",
+      "short_name": "Profile",
+      "description": "View your fitness profile",
+      "url": "/dashboard/profile"
     }
-  ]
+  ],
+  "prefer_related_applications": false
 }
