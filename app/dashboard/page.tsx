@@ -9,31 +9,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/com
 import { AreaChart, Area, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts"
 import { StravaConnect } from "@/components/strava-connect"
 import { useActivitiesStore } from "@/store/activities"
-
-function computeVO2Max(avgHR: number, maxHR: number | null, age = 30, restingHR = 60): number {
-  const mhr = maxHR || (220 - age)
-  const hrr = mhr - restingHR
-  const workHR = avgHR - restingHR
-  let vo2 = 15.3 * (mhr / restingHR)
-  vo2 = vo2 * (0.7 + (workHR / hrr) * 0.3)
-  if (age > 25) vo2 = vo2 * (1 - (age - 25) * 0.01)
-  return Math.round(vo2 * 10) / 10
-}
-
-function fitnessLabel(vo2: number): string {
-  if (vo2 >= 50) return "Exceptional"
-  if (vo2 >= 45) return "Excellent"
-  if (vo2 >= 40) return "Very Good"
-  if (vo2 >= 35) return "Good"
-  if (vo2 >= 30) return "Average"
-  return "Below Avg"
-}
-
-function vo2Progress(vo2: number): number {
-  // Scale 25–65 range to 0–100%
-  return Math.min(100, Math.max(0, ((vo2 - 25) / 40) * 100))
-}
-
+import { computeVO2Max, fitnessLabel, vo2Progress } from "@/lib/fitness"
 
 const containerVariants = {
   hidden: { opacity: 0 },

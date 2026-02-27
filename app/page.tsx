@@ -1,19 +1,12 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { motion } from "framer-motion"
 import { Activity, TrendingUp, Heart, Zap, Menu, X } from "lucide-react"
 import Link from "next/link"
 
 export default function LandingPage() {
-  const [scrollY, setScrollY] = useState(0)
   const [isMenuOpen, setIsMenuOpen] = useState(false)
-
-  useEffect(() => {
-    const handleScroll = () => setScrollY(window.scrollY)
-    window.addEventListener("scroll", handleScroll)
-    return () => window.removeEventListener("scroll", handleScroll)
-  }, [])
 
   const containerVariants = {
     hidden: { opacity: 0 },

@@ -9,16 +9,7 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { createActivity } from "@/app/actions/activities"
-
-function computeVO2Max(avgHR: number, maxHR: number | null, age = 30, restingHR = 60): number {
-  const mhr = maxHR || (220 - age)
-  const hrr = mhr - restingHR
-  const workHR = avgHR - restingHR
-  let vo2 = 15.3 * (mhr / restingHR)
-  vo2 = vo2 * (0.7 + (workHR / hrr) * 0.3)
-  if (age > 25) vo2 = vo2 * (1 - (age - 25) * 0.01)
-  return Math.round(vo2 * 10) / 10
-}
+import { computeVO2Max } from "@/lib/fitness"
 
 const itemVariants = {
   hidden: { opacity: 0, y: 20 },

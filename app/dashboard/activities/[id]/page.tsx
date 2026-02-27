@@ -25,8 +25,8 @@ import { Button } from "@/components/ui/button"
 import { createClient } from "@/lib/supabase/client"
 import { getActivity, saveActivityEnrichment, enrichActivity } from "@/app/actions/activities"
 import HeroCardDialog from "@/components/hero-card"
+import { computeVO2Max, fitnessLabel as fitnessLevel } from "@/lib/fitness"
 
-// --- helpers ---
 function formatTime(seconds: number): string {
   const h = Math.floor(seconds / 3600)
   const m = Math.floor((seconds % 3600) / 60)
@@ -41,29 +41,6 @@ function formatPace(avgSpeedMs: number): string {
   const paceMin = Math.floor(paceMinPerKm)
   const paceSec = Math.round((paceMinPerKm - paceMin) * 60)
   return `${paceMin}:${paceSec.toString().padStart(2, "0")}`
-}
-
-function fitnessLevel(vo2: number | null | undefined): string {
-  if (!vo2) return "—"
-  if (vo2 >= 50) return "Exceptional"
-  if (vo2 >= 45) return "Excellent"
-  if (vo2 >= 40) return "Very Good"
-  if (vo2 >= 35) return "Good"
-  if (vo2 >= 30) return "Average"
-  return "Below Average"
-}
-
-
-// Client-side VO2Max (HR Reserve method, matches server formula)
-function computeVO2Max(avgHR: number, maxHR: number | null, age = 30, restingHR = 60): number {
-  const mhr = maxHR || (220 - age)
-  const hrr = mhr - restingHR
-  const workingHR = avgHR - restingHR
-  const ratio = workingHR / hrr
-  let vo2 = 15.3 * (mhr / restingHR)
-  vo2 = vo2 * (0.7 + ratio * 0.3)
-  if (age > 25) vo2 = vo2 * (1 - (age - 25) * 0.01)
-  return Math.round(vo2 * 10) / 10
 }
 
 const containerVariants = {

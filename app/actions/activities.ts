@@ -37,37 +37,6 @@ export async function enrichActivity(activityId: string, enrichmentData: {
   }
 }
 
-export async function updateActivity(activityId: string, updates: {
-  caption?: string
-  weight_at_time?: number
-  feeling_scale?: number
-  photo_url?: string
-}) {
-  try {
-    const supabase = await createServerSupabaseClient()
-
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-    if (authError || !user) return { error: 'Unauthorized', success: false }
-
-    const { data, error } = await supabase
-      .from('activities')
-      .update({ ...updates, updated_at: new Date().toISOString() })
-      .eq('id', activityId)
-      .eq('user_id', user.id)
-      .select()
-      .single()
-
-    if (error) return { error: error.message, success: false }
-
-    revalidatePath('/dashboard/activities')
-    revalidatePath(`/dashboard/activities/${activityId}`)
-
-    return { data, success: true }
-  } catch (error: any) {
-    return { error: error.message || 'Failed to update activity', success: false }
-  }
-}
-
 export async function deleteActivity(activityId: string) {
   try {
     const supabase = await createServerSupabaseClient()

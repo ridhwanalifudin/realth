@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { motion } from "framer-motion"
-import { User, Mail, Calendar, Weight, Weight as Height, Zap, Save, Loader2, Plus, Trash2 } from "lucide-react"
+import { User, Mail, Calendar, Weight, Ruler, Zap, Save, Loader2, Plus, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { createClient } from "@/lib/supabase/client"
@@ -194,7 +194,7 @@ export default function ProfilePage() {
                   { label: "Full Name", value: profile.full_name, field: "full_name", icon: User },
                   { label: "Email", value: profile.email, field: "email", icon: Mail },
                   { label: "Age", value: profile.age, field: "age", icon: Calendar },
-                  { label: "Height (cm)", value: profile.height, field: "height", icon: Height },
+                  { label: "Height (cm)", value: profile.height, field: "height", icon: Ruler },
                 ].map((item) => {
                   const Icon = item.icon
                   return (
