@@ -5,14 +5,18 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Activity, Home, User, Menu, X, LogOut } from "lucide-react"
 import { motion } from "framer-motion"
+import { createClient } from "@/lib/supabase/client"
 
 export function DashboardNav() {
   const [isOpen, setIsOpen] = useState(false)
   const router = useRouter()
+  const supabase = createClient()
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await supabase.auth.signOut()
     localStorage.removeItem("user")
     router.push("/auth/login")
+    router.refresh()
   }
 
   const navItems = [

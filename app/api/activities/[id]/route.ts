@@ -1,48 +1,44 @@
-import { NextRequest, NextResponse } from "next/server"
-
-// TODO: Replace with actual database
-const mockActivities = [
-  {
-    id: "1",
-    userId: "1",
-    name: "Morning Run",
-    date: "2026-01-15",
-    distance: 9.0,
-    time: "58:30",
-    avgPace: "6:26",
-    calories: 780,
-    heartRate: { avg: 158, max: 175 },
-    vo2max: 48.2,
-    route: [
-      { lat: 40.7128, lng: -74.006, elevation: 10 },
-      { lat: 40.7138, lng: -74.007, elevation: 12 },
-    ],
-    createdAt: new Date().toISOString(),
-  },
-]
+import { NextRequest, NextResponse } from 'next/server'
+import { createServerSupabaseClient } from '@/lib/supabase/server'
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = params
+    const supabase = await createServerSupabaseClient()
+    const { id } = await params
 
-    // TODO: Fetch from database with user authentication
-    const activity = mockActivities.find((a) => a.id === id)
-
-    if (!activity) {
+    // Get authenticated user
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    
+    if (authError || !user) {
       return NextResponse.json(
-        { error: "Activity not found" },
+        { error: 'Unauthorized' },
+        { status: 401 }
+      )
+    }
+
+    // Fetch activity from database
+    const { data: activity, error } = await supabase
+      .from('activities')
+      .select('*')
+      .eq('id', id)
+      .eq('user_id', user.id)
+      .single()
+
+    if (error || !activity) {
+      return NextResponse.json(
+        { error: 'Activity not found' },
         { status: 404 }
       )
     }
 
     return NextResponse.json({ activity }, { status: 200 })
   } catch (error) {
-    console.error("Get activity error:", error)
+    console.error('Get activity error:', error)
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: 'Internal server error' },
       { status: 500 }
     )
   }
@@ -50,31 +46,41 @@ export async function GET(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = params
+    const supabase = await createServerSupabaseClient()
+    const { id } = await params
 
-    // TODO: Delete from database with user authentication
-    const index = mockActivities.findIndex((a) => a.id === id)
-
-    if (index === -1) {
+    // Get authenticated user
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    
+    if (authError || !user) {
       return NextResponse.json(
-        { error: "Activity not found" },
-        { status: 404 }
+        { error: 'Unauthorized' },
+        { status: 401 }
       )
     }
 
-    mockActivities.splice(index, 1)
+    // Delete activity from database
+    const { error } = await supabase
+      .from('activities')
+      .delete()
+      .eq('id', id)
+      .eq('user_id', user.id)
+
+    if (error) {
+      throw error
+    }
 
     return NextResponse.json(
-      { message: "Activity deleted successfully" },
+      { message: 'Activity deleted successfully' },
       { status: 200 }
     )
   } catch (error) {
-    console.error("Delete activity error:", error)
+    console.error('Delete activity error:', error)
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: 'Internal server error' },
       { status: 500 }
     )
   }
@@ -82,32 +88,61 @@ export async function DELETE(
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = params
+    const supabase = await createServerSupabaseClient()
+    const { id } = await params
     const data = await request.json()
 
-    // TODO: Update in database with user authentication
-    const index = mockActivities.findIndex((a) => a.id === id)
-
-    if (index === -1) {
+    // Get authenticated user
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    
+    if (authError || !user) {
       return NextResponse.json(
-        { error: "Activity not found" },
+        { error: 'Unauthorized' },
+        { status: 401 }
+      )
+    }
+
+    // Update activity in database
+    const { data: updatedActivity, error } = await supabase
+      .from('activities')
+      .update({
+        name: data.name,
+        distance: data.distance,
+        elapsed_time: data.elapsed_time,
+        moving_time: data.moving_time,
+        average_speed: data.average_speed,
+        max_speed: data.max_speed,
+        average_heartrate: data.average_heartrate,
+        max_heartrate: data.max_heartrate,
+        total_elevation_gain: data.total_elevation_gain,
+        calories: data.calories,
+        vo2max: data.vo2max,
+        photos: data.photos,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .eq('user_id', user.id)
+      .select()
+      .single()
+
+    if (error || !updatedActivity) {
+      return NextResponse.json(
+        { error: 'Activity not found or update failed' },
         { status: 404 }
       )
     }
 
-    mockActivities[index] = { ...mockActivities[index], ...data }
-
     return NextResponse.json(
-      { activity: mockActivities[index], message: "Activity updated successfully" },
+      { activity: updatedActivity, message: 'Activity updated successfully' },
       { status: 200 }
     )
   } catch (error) {
-    console.error("Update activity error:", error)
+    console.error('Update activity error:', error)
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: 'Internal server error' },
       { status: 500 }
     )
   }

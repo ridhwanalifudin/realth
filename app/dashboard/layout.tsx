@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import type { ReactNode } from "react"
 import { DashboardNav } from "@/components/dashboard-nav"
 import { MobileBottomNav } from "@/components/mobile-bottom-nav"
+import { createClient } from "@/lib/supabase/client"
 
 export default function DashboardLayout({
   children,
@@ -13,14 +14,19 @@ export default function DashboardLayout({
 }) {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(true)
+  const supabase = createClient()
 
   useEffect(() => {
-    const user = localStorage.getItem("user")
-    if (!user) {
-      router.push("/auth/login")
+    const checkAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        router.push("/auth/login")
+      } else {
+        setIsLoading(false)
+      }
     }
-    setIsLoading(false)
-  }, [router])
+    checkAuth()
+  }, [router, supabase])
 
   if (isLoading) {
     return (

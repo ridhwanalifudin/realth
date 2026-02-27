@@ -1,16 +1,18 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import { getProfile, updateProfile as updateProfileAction, addBiometricRecord, getBiometricHistory } from '@/app/actions/profile'
 
 export interface UserProfile {
   id: string
-  email: string
+  user_id: string
+  email?: string
   full_name?: string
   age?: number
   height?: number // in cm
-  gender?: 'male' | 'female' | 'other'
-  weight_goal?: number
-  current_vo2max_avg?: number
-  fitness_level?: 'Beginner' | 'Intermediate' | 'Advanced' | 'Elite'
+  weight?: number // in kg
+  gender?: string
+  vo2max?: number
+  resting_heart_rate?: number
   created_at: string
   updated_at?: string
 }
@@ -19,7 +21,9 @@ export interface BiometricRecord {
   id: string
   user_id: string
   weight: number // in kg
-  fat_percentage?: number
+  body_fat_percentage?: number
+  muscle_mass?: number
+  source?: string
   recorded_at: string
 }
 
@@ -36,6 +40,17 @@ interface UserState {
   setBiometrics: (records: BiometricRecord[]) => void
   logout: () => void
   setLoading: (loading: boolean) => void
+  
+  // Supabase sync actions
+  fetchProfile: () => Promise<void>
+  updateProfileInDB: (updates: Partial<UserProfile>) => Promise<void>
+  addBiometricInDB: (data: {
+    weight: number
+    body_fat_percentage?: number
+    muscle_mass?: number
+    source?: string
+  }) => Promise<void>
+  fetchBiometrics: (limit?: number) => Promise<void>
   
   // Computed
   getCurrentWeight: () => number | null
@@ -81,9 +96,83 @@ export const useUserStore = create<UserState>()(
 
       setLoading: (loading) => set({ isLoading: loading }),
 
+      // Supabase sync actions
+      fetchProfile: async () => {
+        set({ isLoading: true })
+        try {
+          const result = await getProfile()
+          if (result.success && result.profile) {
+            set({ 
+              user: result.profile as UserProfile,
+              isAuthenticated: true
+            })
+          }
+        } catch (error) {
+          console.error('Failed to fetch profile:', error)
+        } finally {
+          set({ isLoading: false })
+        }
+      },
+
+      updateProfileInDB: async (updates) => {
+        set({ isLoading: true })
+        try {
+          const result = await updateProfileAction({
+            full_name: updates.full_name,
+            age: updates.age,
+            gender: updates.gender,
+            height: updates.height,
+            weight: updates.weight,
+            vo2max: updates.vo2max,
+            resting_heart_rate: updates.resting_heart_rate,
+          })
+
+          if (result.success && result.data) {
+            get().updateProfile(result.data as Partial<UserProfile>)
+          }
+        } catch (error) {
+          console.error('Failed to update profile:', error)
+        } finally {
+          set({ isLoading: false })
+        }
+      },
+
+      addBiometricInDB: async (data) => {
+        set({ isLoading: true })
+        try {
+          const result = await addBiometricRecord(data)
+
+          if (result.success && result.data) {
+            get().addBiometric(result.data as BiometricRecord)
+            // Also update profile with latest weight
+            if (get().user) {
+              get().updateProfile({ weight: data.weight })
+            }
+          }
+        } catch (error) {
+          console.error('Failed to add biometric record:', error)
+        } finally {
+          set({ isLoading: false })
+        }
+      },
+
+      fetchBiometrics: async (limit = 30) => {
+        set({ isLoading: true })
+        try {
+          const result = await getBiometricHistory(limit)
+          if (result.success && result.records) {
+            set({ biometrics: result.records as BiometricRecord[] })
+          }
+        } catch (error) {
+          console.error('Failed to fetch biometric history:', error)
+        } finally {
+          set({ isLoading: false })
+        }
+      },
+
       getCurrentWeight: () => {
         const latest = get().biometrics[0]
-        return latest ? latest.weight : null
+        return latest ? latest.weight : get().user?.weight || null
       },
 
       getWeightHistory: (days) => {

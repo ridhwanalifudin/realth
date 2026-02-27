@@ -1,48 +1,36 @@
-import { NextRequest, NextResponse } from "next/server"
-
-// TODO: Replace with actual database queries
-let mockActivities = [
-  {
-    id: "1",
-    userId: "1",
-    name: "Morning Run",
-    date: "2026-01-15",
-    distance: 9.0,
-    time: "58:30",
-    avgPace: "6:26",
-    calories: 780,
-    heartRate: { avg: 158, max: 175 },
-    vo2max: 48.2,
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: "2",
-    userId: "1",
-    name: "Evening Jog",
-    date: "2026-01-12",
-    distance: 6.5,
-    time: "40:15",
-    avgPace: "6:10",
-    calories: 520,
-    heartRate: { avg: 145, max: 162 },
-    vo2max: 47.8,
-    createdAt: new Date().toISOString(),
-  },
-]
+import { NextRequest, NextResponse } from 'next/server'
+import { createServerSupabaseClient } from '@/lib/supabase/server'
 
 export async function GET(request: NextRequest) {
   try {
-    // TODO: Get userId from authentication token
-    const userId = "1"
+    const supabase = await createServerSupabaseClient()
+    
+    // Get authenticated user
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    
+    if (authError || !user) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      )
+    }
 
-    // TODO: Fetch from database
-    const userActivities = mockActivities.filter((a) => a.userId === userId)
+    // Fetch user's activities from database
+    const { data: activities, error } = await supabase
+      .from('activities')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('start_date_local', { ascending: false })
 
-    return NextResponse.json({ activities: userActivities }, { status: 200 })
+    if (error) {
+      throw error
+    }
+
+    return NextResponse.json({ activities: activities || [] }, { status: 200 })
   } catch (error) {
-    console.error("Get activities error:", error)
+    console.error('Get activities error:', error)
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: 'Internal server error' },
       { status: 500 }
     )
   }
@@ -50,37 +38,63 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const supabase = await createServerSupabaseClient()
     const data = await request.json()
 
-    // TODO: Get userId from authentication token
-    const userId = "1"
+    // Get authenticated user
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    
+    if (authError || !user) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      )
+    }
 
     // Validate required fields
-    if (!data.name || !data.distance || !data.time) {
+    if (!data.name || !data.distance || !data.elapsed_time) {
       return NextResponse.json(
-        { error: "Name, distance, and time are required" },
+        { error: 'Name, distance, and elapsed_time are required' },
         { status: 400 }
       )
     }
 
-    // TODO: Save to database
-    const newActivity = {
-      id: Date.now().toString(),
-      userId,
-      ...data,
-      createdAt: new Date().toISOString(),
+    // Insert activity into database
+    const { data: newActivity, error } = await supabase
+      .from('activities')
+      .insert({
+        user_id: user.id,
+        name: data.name,
+        distance: data.distance,
+        elapsed_time: data.elapsed_time,
+        moving_time: data.moving_time || data.elapsed_time,
+        start_date_local: data.start_date_local || new Date().toISOString(),
+        type: data.type || 'Run',
+        average_speed: data.average_speed,
+        max_speed: data.max_speed,
+        average_heartrate: data.average_heartrate,
+        max_heartrate: data.max_heartrate,
+        total_elevation_gain: data.total_elevation_gain,
+        calories: data.calories,
+        vo2max: data.vo2max,
+        map_polyline: data.map_polyline,
+        photos: data.photos || [],
+      })
+      .select()
+      .single()
+
+    if (error) {
+      throw error
     }
 
-    mockActivities.push(newActivity)
-
     return NextResponse.json(
-      { activity: newActivity, message: "Activity created successfully" },
+      { activity: newActivity, message: 'Activity created successfully' },
       { status: 201 }
     )
   } catch (error) {
-    console.error("Create activity error:", error)
+    console.error('Create activity error:', error)
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: 'Internal server error' },
       { status: 500 }
     )
   }

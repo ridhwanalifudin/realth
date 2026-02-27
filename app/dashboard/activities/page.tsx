@@ -6,28 +6,26 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { useActivitiesStore } from '@/store/activities'
-import { mockActivities } from '@/lib/mock-data'
 import { Search, Activity, Clock, Zap, Eye, ChevronLeft, ChevronRight, TrendingUp } from 'lucide-react'
 import Link from 'next/link'
 
 const ITEMS_PER_PAGE = 10
 
 export default function ActivitiesPage() {
-  const { activities, setActivities } = useActivitiesStore()
+  const { activities, fetchActivities } = useActivitiesStore()
   const [searchQuery, setSearchQuery] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
 
-  // Initialize with mock data if empty
+  // Load activities from Supabase on mount
   useEffect(() => {
-    if (activities.length === 0) {
-      setActivities(mockActivities)
-    }
-  }, [activities.length, setActivities])
+    fetchActivities()
+  }, [])
 
   // Filter and search logic
   const filteredActivities = useMemo(() => {
     return activities.filter(activity => {
-      const matchesSearch = activity.display_name.toLowerCase().includes(searchQuery.toLowerCase())
+      const name = activity.display_name || activity.name || ''
+      const matchesSearch = name.toLowerCase().includes(searchQuery.toLowerCase())
       return matchesSearch
     })
   }, [activities, searchQuery])
@@ -169,8 +167,8 @@ export default function ActivitiesPage() {
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
-                            <p className="font-semibold text-foreground truncate">{activity.display_name}</p>
-                            {activity.is_personal_best && (
+                            <p className="font-semibold text-foreground truncate">{activity.display_name || activity.name}</p>
+                            {false && (
                               <Badge variant="default" className="text-xs shrink-0">PR</Badge>
                             )}
                             {!activity.is_synced && (
@@ -195,7 +193,7 @@ export default function ActivitiesPage() {
                           </p>
                         </div>
                         <div className="text-right">
-                          <p className="font-semibold text-foreground">{activity.avg_heart_rate || 'N/A'} bpm</p>
+                          <p className="font-semibold text-foreground">{activity.avg_heart_rate ? `${activity.avg_heart_rate} bpm` : '—'}</p>
                           <p className="text-xs text-foreground/70">Avg HR</p>
                         </div>
                         <Link href={`/dashboard/activities/${activity.id}`}>

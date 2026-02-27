@@ -1,27 +1,34 @@
 "use client"
 
 import type React from "react"
-
 import { useState } from "react"
 import { motion } from "framer-motion"
 import { useRouter } from "next/navigation"
-import { Plus, Calendar, MapPin, Clock, Heart } from "lucide-react"
+import { Plus, Calendar, MapPin, Clock, Heart, Loader2 } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { createActivity } from "@/app/actions/activities"
+
+function computeVO2Max(avgHR: number, maxHR: number | null, age = 30, restingHR = 60): number {
+  const mhr = maxHR || (220 - age)
+  const hrr = mhr - restingHR
+  const workHR = avgHR - restingHR
+  let vo2 = 15.3 * (mhr / restingHR)
+  vo2 = vo2 * (0.7 + (workHR / hrr) * 0.3)
+  if (age > 25) vo2 = vo2 * (1 - (age - 25) * 0.01)
+  return Math.round(vo2 * 10) / 10
+}
 
 const itemVariants = {
   hidden: { opacity: 0, y: 20 },
-  visible: {
-    opacity: 1,
-    y: 0,
-    transition: { duration: 0.5 },
-  },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.5 } },
 }
 
 export default function AddActivityPage() {
   const router = useRouter()
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [error, setError] = useState("")
   const [formData, setFormData] = useState({
     name: "",
     date: new Date().toISOString().split("T")[0],
@@ -34,35 +41,44 @@ export default function AddActivityPage() {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }))
+    setFormData((prev) => ({ ...prev, [name]: value }))
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsSubmitting(true)
+    setError("")
 
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1000))
+    // Parse time mm:ss into seconds
+    const [mm, ss] = formData.time.split(":").map(Number)
+    const totalSeconds = (mm || 0) * 60 + (ss || 0)
 
-    // Store activity
-    const activities = JSON.parse(localStorage.getItem("activities") || "[]")
-    const newActivity = {
-      id: activities.length + 1,
-      ...formData,
-      distance: Number.parseFloat(formData.distance),
-      heartRateAvg: Number.parseInt(formData.heartRateAvg),
-      heartRateMax: Number.parseInt(formData.heartRateMax),
-      createdAt: new Date().toISOString(),
+    // Distance km → meters
+    const distanceM = parseFloat(formData.distance) * 1000
+
+    const avgHR = formData.heartRateAvg ? parseInt(formData.heartRateAvg) : undefined
+    const maxHR = formData.heartRateMax ? parseInt(formData.heartRateMax) : undefined
+    const vo2 = avgHR ? computeVO2Max(avgHR, maxHR ?? null) : undefined
+    const avgSpeed = totalSeconds > 0 ? distanceM / totalSeconds : undefined
+
+    const result = await createActivity({
+      display_name: formData.name,
+      distance: distanceM,
+      elapsed_time: totalSeconds,
+      moving_time: totalSeconds,
+      start_date_local: new Date(formData.date).toISOString(),
+      average_speed: avgSpeed,
+      avg_heart_rate: avgHR,
+      max_heart_rate: maxHR,
+      vo2max_estimate: vo2,
+    })
+
+    if (result.success) {
+      router.push("/dashboard/activities")
+    } else {
+      setError(result.error || "Failed to save activity")
+      setIsSubmitting(false)
     }
-
-    activities.push(newActivity)
-    localStorage.setItem("activities", JSON.stringify(activities))
-
-    setIsSubmitting(false)
-    router.push("/dashboard/activities")
   }
 
   return (
@@ -190,8 +206,8 @@ export default function AddActivityPage() {
               disabled={isSubmitting}
               className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90"
             >
-              <Plus size={18} className="mr-2" />
-              {isSubmitting ? "Saving..." : "Add Activity"}
+              {isSubmitting ? <Loader2 size={18} className="mr-2 animate-spin" /> : <Plus size={18} className="mr-2" />}
+              {isSubmitting ? "Saving…" : "Add Activity"}
             </Button>
             <Link href="/dashboard/activities" className="flex-1">
               <Button variant="outline" className="w-full bg-transparent">
@@ -199,6 +215,7 @@ export default function AddActivityPage() {
               </Button>
             </Link>
           </motion.div>
+          {error && <p className="text-sm text-destructive text-center">{error}</p>}
         </motion.form>
 
         {/* Info Box */}
