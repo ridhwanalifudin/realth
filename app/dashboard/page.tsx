@@ -20,7 +20,7 @@ const containerVariants = {
       delayChildren: 0.1,
     },
   },
-}
+} as const
 
 const itemVariants = {
   hidden: { opacity: 0, y: 20 },
@@ -29,7 +29,7 @@ const itemVariants = {
     y: 0,
     transition: { duration: 0.5 },
   },
-}
+} as const
 
 export default function DashboardPage() {
   const { activities, fetchActivities } = useActivitiesStore()

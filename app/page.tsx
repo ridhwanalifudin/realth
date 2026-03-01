@@ -17,16 +17,16 @@ export default function LandingPage() {
         delayChildren: 0.2,
       },
     },
-  }
+  } as const
 
   const itemVariants = {
     hidden: { opacity: 0, y: 20 },
     visible: {
       opacity: 1,
       y: 0,
-      transition: { duration: 0.8, ease: "easeOut" as const },
+      transition: { duration: 0.8, ease: "easeOut" },
     },
-  }
+  } as const
 
   return (
     <div className="min-h-screen bg-linear-to-br from-background via-background to-primary/5">

@@ -4,15 +4,17 @@ import type { UserProfile, BiometricRecord } from "@/store/user"
 // Mock User Profile
 export const mockUser: UserProfile = {
   id: "user-1",
+  user_id: "user-1",
   email: "runner@realth.app",
   full_name: "Alex Runner",
   age: 28,
   height: 175, // cm
   gender: "male",
-  weight_goal: 70, // kg
-  current_vo2max_avg: 48.5,
-  fitness_level: "Intermediate",
+  weight: 70, // kg
+  vo2max: 48.5,
+  resting_heart_rate: 55,
   created_at: "2024-01-01T00:00:00Z",
+  updated_at: "2024-01-01T00:00:00Z",
 }
 
 // Mock Biometric History
@@ -21,35 +23,35 @@ export const mockBiometrics: BiometricRecord[] = [
     id: "bio-1",
     user_id: "user-1",
     weight: 70.5,
-    fat_percentage: 18.0,
+    body_fat_percentage: 18.0,
     recorded_at: "2026-01-12T07:00:00Z",
   },
   {
     id: "bio-2",
     user_id: "user-1",
     weight: 71.0,
-    fat_percentage: 18.2,
+    body_fat_percentage: 18.2,
     recorded_at: "2026-01-10T07:00:00Z",
   },
   {
     id: "bio-3",
     user_id: "user-1",
     weight: 71.5,
-    fat_percentage: 18.5,
+    body_fat_percentage: 18.5,
     recorded_at: "2026-01-08T07:00:00Z",
   },
   {
     id: "bio-4",
     user_id: "user-1",
     weight: 72.0,
-    fat_percentage: 18.8,
+    body_fat_percentage: 18.8,
     recorded_at: "2026-01-05T07:00:00Z",
   },
   {
     id: "bio-5",
     user_id: "user-1",
     weight: 72.5,
-    fat_percentage: 19.0,
+    body_fat_percentage: 19.0,
     recorded_at: "2026-01-01T07:00:00Z",
   },
 ]

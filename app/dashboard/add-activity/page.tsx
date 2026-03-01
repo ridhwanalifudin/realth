@@ -14,7 +14,7 @@ import { computeVO2Max } from "@/lib/fitness"
 const itemVariants = {
   hidden: { opacity: 0, y: 20 },
   visible: { opacity: 1, y: 0, transition: { duration: 0.5 } },
-}
+} as const
 
 export default function AddActivityPage() {
   const router = useRouter()
@@ -84,7 +84,7 @@ export default function AddActivityPage() {
         {/* Form */}
         <motion.form
           onSubmit={handleSubmit}
-          variants={{ hidden: { opacity: 0 }, visible: { opacity: 1, transition: { staggerChildren: 0.1 } } }}
+          variants={{ hidden: { opacity: 0 }, visible: { opacity: 1, transition: { staggerChildren: 0.1 } } } as const}
           initial="hidden"
           animate="visible"
           className="bg-card border border-border rounded-xl p-8 space-y-6"

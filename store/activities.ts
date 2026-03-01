@@ -55,11 +55,10 @@ interface ActivitiesState {
   fetchActivities: () => Promise<void>
   createActivityInDB: (activity: Omit<Activity, 'id' | 'created_at' | 'updated_at' | 'user_id'>) => Promise<void>
   enrichActivityInDB: (id: string, enrichment: {
-    average_heartrate?: number
-    max_heartrate?: number
-    calories?: number
-    vo2max?: number
-    photos?: string[]
+    avg_heart_rate?: number
+    max_heart_rate?: number
+    vo2max_estimate?: number
+    photo_url?: string
   }) => Promise<void>
   deleteActivityInDB: (id: string) => Promise<void>
   
@@ -132,21 +131,17 @@ export const useActivitiesStore = create<ActivitiesState>()(
         set({ isLoading: true })
         try {
           const result = await createActivity({
-            name: activityData.name,
+            display_name: activityData.display_name || activityData.name || '',
             distance: activityData.distance,
-            elapsed_time: activityData.elapsed_time,
+            elapsed_time: activityData.elapsed_time || 0,
             moving_time: activityData.moving_time,
             start_date_local: activityData.start_date_local,
-            type: activityData.type,
             average_speed: activityData.average_speed,
-            max_speed: activityData.max_speed,
-            average_heartrate: activityData.average_heartrate,
-            max_heartrate: activityData.max_heartrate,
+            avg_heart_rate: activityData.avg_heart_rate,
+            max_heart_rate: activityData.max_heart_rate,
             total_elevation_gain: activityData.total_elevation_gain,
-            calories: activityData.calories,
-            vo2max: activityData.vo2max,
+            vo2max_estimate: activityData.vo2max_estimate,
             map_polyline: activityData.map_polyline,
-            photos: activityData.photos,
           })
 
           if (result.success && result.data) {
@@ -242,23 +237,19 @@ export const useActivitiesStore = create<ActivitiesState>()(
           try {
             switch (mutation.type) {
               case 'create':
-                if (mutation.activity.name && mutation.activity.distance && mutation.activity.elapsed_time) {
+                if (mutation.activity.display_name && mutation.activity.distance && mutation.activity.elapsed_time) {
                   await createActivity({
-                    name: mutation.activity.name,
+                    display_name: mutation.activity.display_name,
                     distance: mutation.activity.distance,
                     elapsed_time: mutation.activity.elapsed_time,
                     moving_time: mutation.activity.moving_time || mutation.activity.elapsed_time,
                     start_date_local: mutation.activity.start_date_local || new Date().toISOString(),
-                    type: mutation.activity.type,
                     average_speed: mutation.activity.average_speed,
-                    max_speed: mutation.activity.max_speed,
-                    average_heartrate: mutation.activity.average_heartrate,
-                    max_heartrate: mutation.activity.max_heartrate,
+                    avg_heart_rate: mutation.activity.avg_heart_rate,
+                    max_heart_rate: mutation.activity.max_heart_rate,
                     total_elevation_gain: mutation.activity.total_elevation_gain,
-                    calories: mutation.activity.calories,
-                    vo2max: mutation.activity.vo2max,
+                    vo2max_estimate: mutation.activity.vo2max_estimate,
                     map_polyline: mutation.activity.map_polyline,
-                    photos: mutation.activity.photos,
                   })
                 }
                 break
@@ -266,11 +257,10 @@ export const useActivitiesStore = create<ActivitiesState>()(
               case 'update':
                 if (mutation.activity.id) {
                   await enrichActivity(mutation.activity.id, {
-                    average_heartrate: mutation.activity.average_heartrate,
-                    max_heartrate: mutation.activity.max_heartrate,
-                    calories: mutation.activity.calories,
-                    vo2max: mutation.activity.vo2max,
-                    photos: mutation.activity.photos,
+                    avg_heart_rate: mutation.activity.avg_heart_rate,
+                    max_heart_rate: mutation.activity.max_heart_rate,
+                    vo2max_estimate: mutation.activity.vo2max_estimate,
+                    photo_url: mutation.activity.photo_url,
                   })
                 }
                 break
